@@ -33,6 +33,8 @@ public interface IViewFinder {
      */
     Rect getFramingRect();
 
+    Rect getScanRect();
+
     /**
      * Width of a {@link android.view.View} that implements this interface
      * <p>Note: this is already implemented in {@link android.view.View},

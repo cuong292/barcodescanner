@@ -1,5 +1,6 @@
 package me.dm7.barcodescanner.core;
 
+import android.app.Activity;
 import android.content.Context;
 import android.content.res.Configuration;
 import android.graphics.Canvas;
@@ -9,41 +10,36 @@ import android.graphics.Path;
 import android.graphics.Point;
 import android.graphics.Rect;
 import android.util.AttributeSet;
+import android.util.DisplayMetrics;
 import android.view.View;
 
 public class ViewFinderView extends View implements IViewFinder {
     private static final String TAG = "ViewFinderView";
-
-    private Rect mFramingRect;
-
-    private static final float PORTRAIT_WIDTH_RATIO = 6f/8;
+    private static final float PORTRAIT_WIDTH_RATIO = 6f / 8;
     private static final float PORTRAIT_WIDTH_HEIGHT_RATIO = 0.75f;
-
-    private static final float LANDSCAPE_HEIGHT_RATIO = 5f/8;
+    private static final float LANDSCAPE_HEIGHT_RATIO = 5f / 8;
     private static final float LANDSCAPE_WIDTH_HEIGHT_RATIO = 1.4f;
     private static final int MIN_DIMENSION_DIFF = 50;
-
     private static final float DEFAULT_SQUARE_DIMENSION_RATIO = 5f / 8;
-
     private static final int[] SCANNER_ALPHA = {0, 64, 128, 192, 255, 192, 128, 64};
-    private int scannerAlpha;
     private static final int POINT_SIZE = 10;
     private static final long ANIMATION_DELAY = 80l;
-
     private final int mDefaultLaserColor = getResources().getColor(R.color.viewfinder_laser);
     private final int mDefaultMaskColor = getResources().getColor(R.color.viewfinder_mask);
     private final int mDefaultBorderColor = getResources().getColor(R.color.viewfinder_border);
     private final int mDefaultBorderStrokeWidth = getResources().getInteger(R.integer.viewfinder_border_width);
     private final int mDefaultBorderLineLength = getResources().getInteger(R.integer.viewfinder_border_length);
-
     protected Paint mLaserPaint;
     protected Paint mFinderMaskPaint;
     protected Paint mBorderPaint;
     protected int mBorderLineLength;
     protected boolean mSquareViewFinder;
+    private Rect mFramingRect;
+    private int scannerAlpha;
     private boolean mIsLaserEnabled;
     private float mBordersAlpha;
     private int mViewFinderOffset = 0;
+    private Rect rect;
 
     public ViewFinderView(Context context) {
         super(context);
@@ -101,7 +97,9 @@ public class ViewFinderView extends View implements IViewFinder {
     }
 
     @Override
-    public void setLaserEnabled(boolean isLaserEnabled) { mIsLaserEnabled = isLaserEnabled; }
+    public void setLaserEnabled(boolean isLaserEnabled) {
+        mIsLaserEnabled = isLaserEnabled;
+    }
 
     @Override
     public void setBorderCornerRounded(boolean isBorderCornersRounded) {
@@ -146,13 +144,15 @@ public class ViewFinderView extends View implements IViewFinder {
 
     @Override
     public void onDraw(Canvas canvas) {
-        if(getFramingRect() == null) {
+        if (getFramingRect() == null) {
             return;
         }
 
-        drawViewFinderMask(canvas);
+//        drawViewFinderMask(canvas);
         drawViewFinderBorder(canvas);
-
+        if (rect != null) {
+            canvas.drawRect(rect, mFinderMaskPaint);
+        }
         if (mIsLaserEnabled) {
             drawLaser(canvas);
         }
@@ -162,7 +162,7 @@ public class ViewFinderView extends View implements IViewFinder {
         int width = canvas.getWidth();
         int height = canvas.getHeight();
         Rect framingRect = getFramingRect();
-        
+
         canvas.drawRect(0, 0, width, framingRect.top, mFinderMaskPaint);
         canvas.drawRect(0, framingRect.top, framingRect.left, framingRect.bottom + 1, mFinderMaskPaint);
         canvas.drawRect(framingRect.right + 1, framingRect.top, width, framingRect.bottom + 1, mFinderMaskPaint);
@@ -200,7 +200,7 @@ public class ViewFinderView extends View implements IViewFinder {
 
     public void drawLaser(Canvas canvas) {
         Rect framingRect = getFramingRect();
-        
+
         // Draw a red "laser scanner" line through the middle to show decoding is active
         mLaserPaint.setAlpha(SCANNER_ALPHA[scannerAlpha]);
         scannerAlpha = (scannerAlpha + 1) % SCANNER_ALPHA.length;
@@ -225,8 +225,8 @@ public class ViewFinderView extends View implements IViewFinder {
         int height;
         int orientation = DisplayUtils.getScreenOrientation(getContext());
 
-        if(mSquareViewFinder) {
-            if(orientation != Configuration.ORIENTATION_PORTRAIT) {
+        if (mSquareViewFinder) {
+            if (orientation != Configuration.ORIENTATION_PORTRAIT) {
                 height = (int) (getHeight() * DEFAULT_SQUARE_DIMENSION_RATIO);
                 width = height;
             } else {
@@ -234,7 +234,7 @@ public class ViewFinderView extends View implements IViewFinder {
                 height = width;
             }
         } else {
-            if(orientation != Configuration.ORIENTATION_PORTRAIT) {
+            if (orientation != Configuration.ORIENTATION_PORTRAIT) {
                 height = (int) (getHeight() * LANDSCAPE_HEIGHT_RATIO);
                 width = (int) (LANDSCAPE_WIDTH_HEIGHT_RATIO * height);
             } else {
@@ -243,17 +243,37 @@ public class ViewFinderView extends View implements IViewFinder {
             }
         }
 
-        if(width > getWidth()) {
+        if (width > getWidth()) {
             width = getWidth() - MIN_DIMENSION_DIFF;
         }
 
-        if(height > getHeight()) {
+        if (height > getHeight()) {
             height = getHeight() - MIN_DIMENSION_DIFF;
         }
 
         int leftOffset = (viewResolution.x - width) / 2;
         int topOffset = (viewResolution.y - height) / 2;
         mFramingRect = new Rect(leftOffset + mViewFinderOffset, topOffset + mViewFinderOffset, leftOffset + width - mViewFinderOffset, topOffset + height - mViewFinderOffset);
+    }
+
+    @Override
+    public Rect getScanRect() {
+        if (mFramingRect != null) {
+            rect = new Rect();
+            DisplayMetrics displayMetrics = new DisplayMetrics();
+            ((Activity) getContext()).getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
+            int height = displayMetrics.heightPixels;
+            int width = displayMetrics.widthPixels;
+            int xRatio = 2000 / width;
+            int yRatio = 2000 / height;
+            rect.top = Math.max(-mFramingRect.height() * yRatio / 2, -1000);
+            rect.left = Math.max(-mFramingRect.width() * xRatio / 2, -1000);
+            rect.bottom = Math.min(mFramingRect.height() * yRatio / 2, 1000);
+            rect.right = Math.min(mFramingRect.width() * xRatio / 2, 1000);
+            invalidate();
+            return rect;
+        }
+        return null;
     }
 }
 
